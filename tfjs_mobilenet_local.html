@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Image Processing</title>
+</head>
+<body>
+  <h1>画像判定_ローカル_tfminjs tfjsmodels</h1>
+  <hr>
+  <input type="file" id="imageInput">
+  <h5>canvas要素</h5>
+  <canvas id="canvas" width="640" height="480"></canvas>
+  <label>判定結果</label>
+  <!-- 判定結果を表示するlabel要素 -->
+  <label id="result_label"></label>
+  <hr>
+
+  <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>-->
+  <script src="./static/js/@tensorflow/tfjs/dist/tf.min.js"></script>
+  <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>-->
+  <script src="./static/model/@tensorflow-models/mobilenet/dist/mobilenet.min.js"></script>
+  
+
+  <script>
+    const imageInput = document.getElementById('imageInput');
+    const canvas = document.getElementById('canvas');
+    const result_label = document.getElementById("result_label");
+
+    imageInput.addEventListener('change', () => {
+        // inputタグで入力された画像のひとつめを選択
+        const file = imageInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const img = new Image();
+                img.onload = async () => {
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    // processImageDataを実行して推論結果を取得
+                    const predictions = await processImageData(imageData);
+                    // 推論結果をlabel要素に表示
+                    result_label.innerText = JSON.stringify(predictions);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    async function processImageData(imageData) {
+        await tf.setBackend('webgl');
+        // TFJSモデル読込
+        const model = await mobilenet.load();
+        const tensor = tf.browser.fromPixels(imageData);
+        // 推論
+        const predictions = await model.classify(tensor);
+        console.log(predictions)
+        // 推論結果を返す
+        return predictions;
+    }
+  </script>
+</body>
+</html>
