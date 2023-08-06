@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>tfjs</title>
+</head>
+<body>
+    <h1 style="background-color: rgb(30, 255, 1);">◆デジタルって何ができるんだろう？</h1>
+    <h2 style="background-color: rgb(255, 238, 88);">〇カテゴリ：ディープラーニング</h2>
+    <h3 style="background-color: rgb(246, 138, 145);">機能：セマンティックセグメンテーション（画像から検出した物を塗りつぶす機能）</h3>
+    <h4 style="background-color: rgb(108, 221, 255);">詳細：tensorflowのdeeplab(2019年くらいまでイケイケだったモデル)</h4>
+    <hr>
+    <input type="file" id="imageInput">
+    <br>
+    <p>deeplabのモデルを選択してください</p>
+    <select id="modelSelect"> <!-- 条件２：モデル選択用のドロップダウン -->
+        <option value="pascal">PASCAL</option>
+        <option value="cityscapes">Cityscapes</option>
+        <option value="ade20k">ADE20K</option>
+    </select>
+    <hr>
+    <button id="executeAI">AI実行</button> <!-- 条件３：AI実行ボタン -->
+    <label>※処理完了までに5秒ほどかかります。（完了したら検出結果と画像が表示されます）</label>
+    <hr>
+    <label>入力画像</label><br>
+    <canvas id="inputCanvas" width="200" height="200" style="border: 2px solid rgb(126, 126, 126);"></canvas>
+    <hr>
+    <label style="font-size: 2rem;">検出結果</label>
+    <br>
+    <label id="result_label"></label>
+    <br>
+    <label>検出画像</label><br>
+    <canvas id="outputCanvas" width="200" height="200" style="border: 2px solid rgb(126, 126, 126);"></canvas>
+    <br>
+    <label>検出結果(マスク画像)</label><br>
+    <canvas id="outputCanvas_mask" width="200" height="200" style="border: 2px solid rgb(126, 126, 126);"></canvas>
+    <hr>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/deeplab"></script>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const inputCanvas = document.getElementById('inputCanvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const outputCanvas_mask = document.getElementById('outputCanvas_mask');
+        const resultLabel = document.getElementById("result_label");
+        const modelSelect = document.getElementById('modelSelect');
+        const executeAI = document.getElementById('executeAI');
+        const waitMessage = document.querySelector("h5");
+        let img = new Image(); // 画像データは再利用するので、グローバル変数に
+
+
+        imageInput.addEventListener('change', () => {
+            let file = imageInput.files[0];
+            if (file) {
+                let reader = new FileReader();
+                reader.onload = (event) => {
+                    img.onload = () => {
+                        let ctx = inputCanvas.getContext('2d');
+                        inputCanvas.width = 200;
+                        inputCanvas.height = img.height * (200 / img.width);
+                        ctx.drawImage(img, 0, 0, inputCanvas.width, inputCanvas.height);
+                        waitMessage.style.display = "none";
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+                waitMessage.style.display = "block";
+            }
+        });
+
+        executeAI.addEventListener('click', async () => {
+            // AI実行ボタンが押されたら推論を実施
+            let predictions = await processImageData(inputCanvas);
+            console.log("推論、描画完了！")
+            resultLabel.innerText = JSON.stringify(predictions);
+            console.log("AI実行処理完了")
+        });
+
+        // 推論と出力画像生成
+        async function processImageData(canvas) {
+            await tf.setBackend('webgl');
+            console.log("モデル読み込む")
+            let modelName = modelSelect.value;
+            let quantizationBytes = 2;
+            console.log("Deeplab実行")
+            let model = await deeplab.load({base: modelName, quantizationBytes});
+            //let model = await deeplab.load();
+            let tensor = tf.browser.fromPixels(canvas);
+            let predictions = await model.segment(tensor);
+            let segmap = predictions.segmentationMap;
+            console.log(predictions)
+            console.log("マスクのテンソル取得完了")
+
+            // 画像データに変換してキャンバスに描画
+            let rgbaArray = new Uint8Array(predictions.width * predictions.height * 4);
+            console.log(segmap)
+            console.log(rgbaArray)
+            for (let i = 0; i < predictions.width * predictions.height * 4; i=i+4) {
+                if (segmap[i] !== 0 | segmap[i+1] !== 0 | segmap[i+2] !== 0 ) {
+                    rgbaArray[i] = 0;
+                    rgbaArray[i + 1] = 255; // マスクの色はG層を255に設定
+                    rgbaArray[i + 2] = 0;
+                    rgbaArray[i + 3] = 0.25 * 255; // 条件１：それ以外の部分は透過率を0.5に
+                } else {
+                    rgbaArray[i] = 0;
+                    rgbaArray[i + 1] = 0;
+                    rgbaArray[i + 2] = 0;
+                    rgbaArray[i + 3] = 0; // 条件１：RGBが0のところは透過率を0に
+                }
+            }
+            console.log(rgbaArray)
+            let outputImageData = new ImageData(new Uint8ClampedArray(rgbaArray), predictions.width, predictions.height);
+            console.log("マスクの画像をUint8化が作成完了")
+            console.log(outputImageData)
+            // 描画先を合わせて再描画
+            console.log("重ねて描画")
+            outputCanvas.width = inputCanvas.width;
+            outputCanvas.height = inputCanvas.height;
+            let ctxOutput = outputCanvas.getContext('2d');
+            ctxOutput.clearRect(0, 0, outputCanvas.width, outputCanvas.height); // 前回の描画を削除
+            ctxOutput.drawImage(img, 0, 0, outputCanvas.width, outputCanvas.height); // 元画像を再描画
+            ctxOutput.drawImage(await createImageBitmap(outputImageData), 0, 0, outputCanvas.width, outputCanvas.height); // マスク画像を重ね合わせ
+            console.log("マスクだけを描画")
+
+            outputCanvas_mask.width = inputCanvas.width;
+            outputCanvas_mask.height = inputCanvas.height;
+            let ctxOutput_mask = outputCanvas_mask.getContext('2d');
+            //ctxOutput.clearRect(0, 0, outputCanvas_mask.width, outputCanvas_mask.height); // 前回の描画を削除
+            //ctxOutput.drawImage(img, 0, 0, outputCanvas_mask.width, outputCanvas_mask.height); // 元画像を再描画
+            ctxOutput_mask.drawImage(await createImageBitmap(outputImageData), 0, 0, outputCanvas_mask.width, outputCanvas_mask.height); // マスク画像を重ね合わせ
+            
+            console.log("再描画完了")
+            // メモリ解放
+            tensor.dispose();
+            
+            return predictions;
+        }
+    </script>
+</body>
+</html>

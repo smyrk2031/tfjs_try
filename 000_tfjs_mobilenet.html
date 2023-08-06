@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>tfjs</title>
+    <style>
+        body{
+            width: 60%;
+            margin: auto;
+        }
+        .inline_block_main{
+            display:block;
+            border:solid 1px;
+            font-size:1.5rem;
+            padding: 10px 20px 10px 20px;
+            width: 100%;
+        }
+        .inline_block_sub{
+            display: inline-block;
+            width: 50%
+        }
+        .inline_block_sub2{
+            display: inline-block;
+            width: 25%
+        }
+        .inline_block_run{
+            display: inline-block;
+            margin: auto;
+            vertical-align: middle;
+            width: 5%
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 style="background-color: rgb(30, 255, 1);">◆デジタルって何ができるんだろう？</h1>
+    </header>
+    <div class="inline_block_main">
+        <label>カテゴリ ➡ ディープラーニング</label><br>
+        <label>機能 ➡ 画像分類</label><br>
+        <label>詳細 ➡ tensorflowの畳込みNN（mobilenet）の学習済みモデル</label><br>
+    </div>
+    <br>
+    <div class="inline_block_main" style="border:solid 1px; font-size:1.5rem; padding: 10px 20px 10px 20px;">
+        <label>◇AIモデルの選択（※V2_alpha1.0が最も高精度です）</label><br>
+        <select id="modelSelect">
+            <option value="V2_alpha=1.0">V2_alpha=1.0</option>
+            <option value="V2_alpha=0.5">V2_alpha=0.5</option>
+            <option value="V1_alpha=1.0">V1_alpha=1.0</option>
+            <option value="V1_alpha=0.5">V1_alpha=0.5</option>
+            <option value="V1_alpha=0.25">V1_alpha=0.25</option>
+        </select>
+        <!--<hr width=95% color="gray">-->
+    </div>
+    <br>
+    <div class="inline_block_main" style="border:solid 1px;font-size:1.5rem; padding: 10px 20px 10px 20px;">
+        <div style="display: flex; margin: auto; text-align: center;justify-content:center">
+            <div class="inline_block_sub">
+                <label>◇画像を選んでください</label><br>
+                <div class="inline_block_sub2">
+                    <!-- 画像のアップロード -->
+                    <input type="file" id="imageInput" style="display: none;">
+                    <button id="imageInput_btn" type="button">画像を選択</button>
+                </div>
+                <div class="inline_block_sub2">
+                    <button id="cameraButton">カメラ起動</button>
+                    <button id="captureButton" style="display:none;">撮影</button>
+                </div>
+                <div class="inline_block_sub2">
+                    <button id="camstopButton" style="display:none;">カメラ停止</button>
+                </div>
+                <br>
+                <!-- ライブカメラ機能 -->
+                <label id="video_label" style="display:none;">カメラ画像</label><br>
+                <video autoplay id="video" style="display:none; text-align: center;"></video>
+                <!-- 判定に使用する画像 -->
+                <label id="inputCanvas_label">入力画像</label><br>
+                <canvas id="inputCanvas" width="200" height="200" style="border: 2px solid rgb(92, 52, 52); margin: auto; text-align: center;"></canvas>
+            </div>
+            <hr>
+            <div class="inline_block_run">
+                <button id="executeAI" disabled="false" style="background-color: rgb(255, 169, 185);height: 4rem;font-weight: bold;">実行</button>
+            </div>
+            <hr>
+            <div class="inline_block_sub">
+                <br><br>
+                <label>検出結果</label>
+                <label id="err_label"></label>
+                <br>
+                <table id="resultTable" border="1" style="margin:auto">
+                    <tr><th style="min-width: 5rem;">No</th>
+                        <th style="min-width: 20rem;">分類名</th>
+                        <th style="min-width: 10rem;">確率</th></tr>
+                    <tr><td>1</td><td></td><td></td></tr>
+                    <tr><td>2</td><td></td><td></td></tr>
+                    <tr><td>3</td><td></td><td></td></tr>
+                </table>
+                <br>
+                <label>AI処理時間：</label>
+                <label id="timeLabel"></label>
+            </div>
+        </div>
+    </div>
+    <hr>
+    <footer style="height: 20px;background-color: rgb(177, 94, 255);"></footer>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>-->
+   
+    <script>
+        // ページロード時に初期のcanvasのサイズを保存し、canvasサイズ内で画像を最大化する
+        const initialWidth = document.getElementById('inputCanvas').width;
+        const initialHeight = document.getElementById('inputCanvas').height;
+        const imageInput = document.getElementById('imageInput');
+        const imageInput_btn = document.getElementById("imageInput_btn");
+        const video = document.getElementById('video');
+        const video_label = document.getElementById('video_label');
+        const inputCanvas = document.getElementById('inputCanvas');
+        const inputCanvas_label = document.getElementById('inputCanvas_label');
+        const cameraButton = document.getElementById('cameraButton');
+        const camstopButton = document.getElementById('camstopButton');
+        const captureButton = document.getElementById('captureButton');
+        const executeAI = document.getElementById('executeAI');
+        const modelSelect = document.getElementById('modelSelect');
+        const err_label = document.getElementById("err_label");
+        const resultTable = document.getElementById('resultTable');
+        const timeLabel = document.getElementById('timeLabel');
+        let img = new Image(); // 画像データは再利用するので、グローバル変数に
+        let model;
+
+        // 初期にモデルを読み込んでおく
+        async function loadModel(flag) {
+            console.log('Model Loading MobilenetV2..');
+            executeAI.disabled = true;
+            console.log(executeAI)
+            let modelName = modelSelect.value;
+            if (flag === 0) {
+                model = await mobilenet.load({version:Number(modelName.split('_')[0][1]), alpha:Number(modelName.split('_')[1].split('=')[1])});
+                //model = await mobilenet.load({version:1,alpha:0.25});
+                err_label.innerText = ""
+                console.log('モデルの初期ロード完了');
+            } else {
+                model = await mobilenet.load({version:Number(modelName.split('_')[0][1]), alpha:Number(modelName.split('_')[1].split('=')[1])});
+                err_label.innerText = ""
+                console.log('モデル変更完了');
+            }
+            executeAI.disabled = false;
+        }
+        loadModel(0);
+
+        // モデル選択のドロップダウンを切替えたらモデルをロードし直す
+        modelSelect.addEventListener('change', () => {
+            console.log('モデル変更');
+            loadModel(1);
+        });
+
+        // 画像を選択のボタンが押された時に、inputタグを機能させる
+        imageInput_btn.addEventListener("click", (e) => {
+            if (imageInput) {
+                imageInput.click();
+            }
+        },false);
+
+        // カメラの起動
+        cameraButton.addEventListener('click', async () => {
+            try {
+                // カメラ起動ボタンを無効化して二度押し防止
+                cameraButton.disabled = true;
+                let mediaStream = await navigator.mediaDevices.getUserMedia({
+                    // デバイスのカメラ解像度に合わせる必要がある（ポップアップ表示で全画面にしたい）
+                    video: { width: { ideal: 600 }, height: { ideal: 480 } }
+                    // video : true
+                });
+                video.srcObject = mediaStream;
+                video.style.display = 'block';
+                video_label.style.display = 'block';
+                // ボタンの表示/非表示を切替え
+                inputCanvas.style.display = 'none';
+                inputCanvas_label.style.display = 'none';
+                cameraButton.style.display = 'none';
+                captureButton.style.display = 'block';
+                camstopButton.style.display = 'block';
+            } catch (error) {
+                console.error("Camera access was denied:", error);
+                // カメラアクセスが拒否された時、ボタンを再度有効にする
+                cameraButton.disabled = false;
+                video.srcObject.getTracks().forEach(track => track.stop());
+            };
+        });
+
+        // カメラのキャンセル
+        camstopButton.addEventListener('click', () =>{
+            // カメラの映像ストリームを停止
+            video.srcObject.getTracks().forEach(track => track.stop());
+            // ボタンの表示/非表示を切替え
+            cameraButton.disabled = false;
+            video.style.display = 'none';
+            video_label.style.display = 'none';
+            inputCanvas.style.display = 'block';
+            inputCanvas_label.style.display = 'block';
+            cameraButton.style.display = 'block';
+            captureButton.style.display = 'none';
+            camstopButton.style.display = 'none';
+        })
+
+        // カメラの撮影
+        captureButton.addEventListener('click', () => {
+            // 推論結果のテキストをリセットする
+            displayResults(1);
+            // カメラの映像ストリームを停止
+            video.srcObject.getTracks().forEach(track => track.stop());
+
+            // キャンバスの設定
+            let ctxInput = inputCanvas.getContext('2d');
+            if (video.videoWidth === video.videoHeight) {
+                inputCanvas.width = video.videoWidth / (video.videoWidth / initialWidth);
+                inputCanvas.height = video.videoHeight / (video.videoHeight / initialHeight);
+            } else if (video.videoWidth < video.videoHeight) {
+                // 入力画像が縦長の場合は、canvasの縦に合わせて、横はアクセプト比の商
+                inputCanvas.width = (video.videoWidth / (video.videoWidth / initialWidth)) / (video.videoHeight / video.videoWidth);
+                inputCanvas.height = video.videoHeight / (video.videoHeight / initialHeight);
+            } else if (video.videoWidth > video.videoHeight) {
+                // 入力画像が横長の場合は、canvasの横に合わせて、縦はアクセプト比の商
+                inputCanvas.width = video.videoWidth / (video.videoWidth / initialWidth);
+                inputCanvas.height = (video.videoHeight / (video.videoHeight / initialHeight)) / (video.videoWidth / video.videoHeight);
+            }
+            
+            // キャンバスに動画の現在のフレームを描画
+            ctxInput.drawImage(video, 0, 0, inputCanvas.width, inputCanvas.height);
+
+            // ボタンの表示/非表示を切替え
+            cameraButton.disabled = false;
+            video.style.display = 'none';
+            video_label.style.display = 'none';
+            inputCanvas.style.display = 'block';
+            inputCanvas_label.style.display = 'block';
+            camstopButton.style.display = 'none';
+            captureButton.style.display = 'none';
+            cameraButton.style.display = 'block';
+        });
+
+
+        // inputタグに画像をアップロードされた時にcanvasに表示する
+        imageInput.addEventListener('change', () => {
+            // 推論結果のテキストをリセットする
+            displayResults(1);
+            // inputタグで入力された画像のひとつめを選択
+            let file = imageInput.files[0];
+            if (file) {
+                let reader = new FileReader();
+                reader.onload = async (event) => {
+                    img.onload = async () => {
+                        // キャンバスの設定
+                        let ctxInput = inputCanvas.getContext('2d');
+                        if (img.width === img.height) {
+                            inputCanvas.width = img.width / (img.width / initialWidth);
+                            inputCanvas.height = img.height / (img.height / initialHeight);
+                        } else if (img.width < img.height) {
+                            // 入力画像が縦長の場合は、canvasの縦に合わせて、横はアクセプト比の商
+                            inputCanvas.width = (img.width / (img.width / initialWidth)) / (img.height / img.width);
+                            inputCanvas.height = img.height / (img.height / initialHeight);
+                        } else if (img.width > img.height) {
+                            // 入力画像が横長の場合は、canvasの横に合わせて、縦はアクセプト比の商
+                            inputCanvas.width = img.width / (img.width / initialWidth);
+                            inputCanvas.height = (img.height / (img.height / initialHeight)) / (img.width / img.height);
+                        }
+
+                        ctxInput.drawImage(img, 0, 0, inputCanvas.width, inputCanvas.height);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // AI実行ボタンを押下
+        executeAI.addEventListener('click', async () => {
+            // AI実行ボタンが押されたら推論を実施
+            executeAI.disabled = true;
+            let startTime = performance.now();
+            let predictions = await processImageData(inputCanvas);
+            console.log("推論、描画完了！")
+            // 結果をテーブル要素に表示
+            displayResults(predictions);
+            let endTime = performance.now();
+            let inferenceTime = (endTime - startTime) / 1000; // 秒に変換
+            // 推論時間を表示
+            timeLabel.innerText = `(推論時間: ${inferenceTime.toFixed(3)}秒)`;
+            console.log("AI実行処理完了")
+            executeAI.disabled = false;
+        });
+
+        // 推論
+        async function processImageData(canvas) {
+            await tf.setBackend('webgl');
+            if (!model) {
+                err_label.innerText = '◆モデルが読み込まれていません。インターネット接続を確認し、少し時間をおいてから再度実行してください';
+                return;
+            };
+            console.log("推論用データ取得・・・");
+            // canvasInputに表示されている画像をテンソルに変換
+            let imageData = canvas.getContext('2d').getImageData(0, 0, inputCanvas.width, inputCanvas.height);
+            console.log("推論用データ変換・・・");
+            const tensor = tf.browser.fromPixels(imageData);
+            // 推論
+            console.log("推論");
+            const predictions = await model.classify(tensor);
+            return predictions
+        };
+
+        // テーブル要素に結果を表示する
+        function displayResults(predictions) {
+            console.log(typeof(predictions));
+            if (typeof(predictions) === "number") {
+                // テーブルのヘッダー行を除いてテーブルの内容をクリア
+                while (resultTable.rows.length > 1) {
+                    resultTable.deleteRow(1);
+                }
+            } else {
+                // テーブルのヘッダー行を除いてテーブルの内容をクリア
+                while (resultTable.rows.length > 1) {
+                    resultTable.deleteRow(1);
+                }          
+                // テーブルに結果を追加
+                predictions.forEach((prediction, index) => {
+                    const row = resultTable.insertRow();
+                    const noCell = row.insertCell();
+                    const classNameCell = row.insertCell();
+                    const probabilityCell = row.insertCell();
+
+                    noCell.textContent = index + 1;
+                    classNameCell.textContent = prediction.className;
+                    probabilityCell.textContent = prediction.probability.toFixed(4);
+                });
+            };
+        }
+    </script>
+</body>
+</html>
