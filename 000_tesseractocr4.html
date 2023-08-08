@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesseract.js OCR Web App</title>
+    <style>
+        /* モーダルのスタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+        }
+        .modal-content {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>TesseractJSでOCR</h1>
+    <hr>
+    <label>OCRで検出したい文字の種類を選択してください</label>
+    <br>
+    <select id="languageSelect">
+        <option value="jpn">日本語</option>
+        <option value="eng">英語</option>
+        <option value="osd">数字</option>
+    </select>
+    <hr>
+    <input type="file" id="imageInput">
+    <hr>
+    <!-- 入力画像表示用のcanvas要素 -->
+    <label>入力画像</label>
+    <br>
+    <canvas id="imageCanvas" width="240" height="240" style="border: 2px solid rgb(126, 126, 126);"></canvas>
+    <hr>
+    <!-- 結果表示用のcanvas要素 -->
+    <label>結果</label>
+    <br>
+    <canvas id="resultCanvas" width="240" height="240" style="border: 2px solid rgb(126, 126, 126);"></canvas>
+
+    <!-- モーダルエリア -->
+    <div id="canvasModal" class="modal" onclick="closeModal()">
+        <canvas id="modalCanvas" class="modal-content"></canvas>
+    </div>
+    <br>
+    <button id="ocrButton">OCR実行</button>
+    <br>
+    <textarea id="ocrResult" rows="10" cols="50" readonly></textarea>
+    <label id="timeLabel"></label>
+    <hr>
+    <br>
+
+    <script src="https://cdn.rawgit.com/naptha/tesseract.js/1.0.10/dist/tesseract.js"></script>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const resultCanvas = document.getElementById('resultCanvas'); // 結果表示用のcanvas要素
+        const ocrButton = document.getElementById('ocrButton');
+        const ocrResult = document.getElementById('ocrResult');
+        const languageSelect = document.getElementById('languageSelect');
+        const timeLabel = document.getElementById('timeLabel');
+        const modal = document.getElementById('canvasModal');  // モーダルエリア
+        const modalCanvas = document.getElementById('modalCanvas');
+        const modalCtx = modalCanvas.getContext('2d');
+
+        let ctx = imageCanvas.getContext('2d');
+        let resultCtx = resultCanvas.getContext('2d');
+        let img = new Image();
+
+
+        // canvas要素のクリックイベント
+        function enlargeCanvas(canvas) {
+            // アスペクト比を計算
+            const aspectRatio = canvas.width / canvas.height;
+            let newWidth, newHeight;
+
+            if (window.innerWidth / window.innerHeight < aspectRatio) {
+                newWidth = window.innerWidth;
+                newHeight = window.innerWidth / aspectRatio;
+            } else {
+                newHeight = window.innerHeight;
+                newWidth = window.innerHeight * aspectRatio;
+            }
+
+            modalCanvas.width = newWidth;
+            modalCanvas.height = newHeight;
+            modalCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+            modal.style.display = 'block';
+        }
+
+        // モーダルを閉じる関数
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // canvas要素にクリックイベントを追加
+        imageCanvas.addEventListener('click', function() {
+            enlargeCanvas(imageCanvas);
+        });
+
+        resultCanvas.addEventListener('click', function() {
+            enlargeCanvas(resultCanvas);
+        });
+        
+
+        imageInput.addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                img.onload = function () {
+                    imageCanvas.width = img.width;
+                    imageCanvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    resultCanvas.width = img.width;  // 結果表示用のcanvasもサイズを調整
+                    resultCanvas.height = img.height;
+                    resultCtx.drawImage(img, 0, 0);
+                };
+                img.src = e.target.result;
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        // OCR実行
+        ocrButton.addEventListener('click', function () {
+            const lang = languageSelect.value;
+            let startTime = performance.now();
+            
+            console.log("OCR実行")
+            Tesseract.recognize(imageCanvas, lang, { logger: progress => console.log(progress) })
+                .then(result => {
+                    console.log(result);
+                    ocrResult.value = result.text;
+                    // 結果を赤色でcanvasに描画
+                    resultCtx.drawImage(img, 0, 0);
+                    resultCtx.fillStyle = 'red';
+                    result.words.forEach(word => {
+                        resultCtx.fillText(word.text, word.bbox.x0, word.bbox.y0);
+                    });
+                    let endTime = performance.now();
+                    let inferenceTime = (endTime - startTime) / 1000;
+                    timeLabel.innerText = `(推論時間: ${inferenceTime.toFixed(3)}秒)`;
+                });
+                console.log("OCR実行完了")
+        });
+    </script>
+</body>
+
+</html>
