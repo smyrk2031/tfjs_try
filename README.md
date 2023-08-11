@@ -3,10 +3,10 @@
 TFJSでワンページのHTMLを作るトライ
 <hr>
 # TFJSのモデル
-- 画像分類：mobilenet, mobilenetV2
-- 物体検出：coco-ssd, tfjs-yolo-tiny
-- セマンティックセグメンテーション：deeplab
-- 音声検出：speech-commands
+-画像分類：mobilenet, mobilenetV2
+-物体検出：coco-ssd, tfjs-yolo-tiny
+-セマンティックセグメンテーション：deeplab
+-音声検出：speech-commands
 
 
 ## 1 CDNで使用する方法(CDNを使うので外部とのネットワーク接続に依存する)
