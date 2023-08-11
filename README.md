@@ -8,7 +8,12 @@ TFJSでワンページのHTMLを作るトライ
 - 物体検出：coco-ssd, tfjs-yolo-tiny
 - セマンティックセグメンテーション：deeplab
 - 音声検出：speech-commands
-
+'''
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
+'''
+"""
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
+"""
 
 ## 1 CDNで使用する方法(CDNを使うので外部とのネットワーク接続に依存する)
 HTMLへのscript表記で下記を使うことで使用できる
