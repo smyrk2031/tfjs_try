@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera App</title>
+
+    <style>
+        /* 以下はWebページのデザインに関するスタイル情報です。 */
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #cameraWrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            border: 2px solid black;
+            max-width: 100%;
+        }
+
+        #buttonWrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            margin: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 以下はカメラの映像やボタンを表示する部分のHTMLです。 -->
+    <div id="cameraWrapper">
+        <!-- video要素は、カメラからの映像を表示するためのものですが、ここでは非表示にしています。 -->
+        <video id="videoElement" style="display: none;"></video>
+        <!-- canvas要素は、video要素からの映像を描画するためのものです。 -->
+        <canvas id="cameraCanvas" width="640" height="480"></canvas>
+    </div>
+    <div id="buttonWrapper">
+        <!-- カメラの操作を行うためのボタンです。 -->
+        <button id="startCamera">カメラ起動</button>
+        <button id="captureButton" disabled>撮影</button>
+    </div>
+
+    <div id="resultWrapper">
+        <!-- OCR結果を表示するためのラベル -->
+        <p id="ocrResult" style="background-color: lightgreen; padding: 10px;"></p>
+        <!-- 結果を送信するためのボタン -->
+        <button id="sendButton">送信</button>
+    </div>
+
+    <!-- tesseract.jsライブラリの追加 -->
+    <script src="https://cdn.rawgit.com/naptha/tesseract.js/1.0.10/dist/tesseract.js"></script>
+
+    <script>
+        // JavaScriptで動作する部分です。
+        // DOM要素（Webページの要素）を取得して、変数に格納しています。
+        const startCameraButton = document.getElementById('startCamera');
+        const videoElement = document.getElementById('videoElement');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const captureButton = document.getElementById('captureButton');
+        const ocrResultLabel = document.getElementById('ocrResult');
+        const sendButton = document.getElementById('sendButton');
+        let stream = null; // カメラの映像ストリームを保存するための変数
+        let isCapturing = false; // 映像を描画し続けるかのフラグ
+
+        // 撮影ボタンがクリックされた時の動作を定義しています。
+        captureButton.addEventListener('click', () => {
+            if (stream) { // カメラが起動していれば、以下の処理を実行
+                const ctx = cameraCanvas.getContext('2d'); // canvas要素から2Dの描画コンテキストを取得
+                const videoWidth = videoElement.videoWidth;
+                const videoHeight = videoElement.videoHeight;
+
+                // カメラの映像サイズに合わせてcanvasのサイズを変更
+                cameraCanvas.width = videoWidth;
+                cameraCanvas.height = videoHeight;
+
+                // 現在の映像をキャンバスに描画
+                ctx.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
+                drawRedFrame(ctx); // 赤いフレームを描画する関数を呼び出し
+
+                isCapturing = false; // 映像の連続描画を停止
+
+                startCameraButton.disabled = false; // カメラ起動ボタンを有効化
+                captureButton.disabled = true; // 撮影ボタンを無効化
+
+
+                // 赤い四角枠の中の画像を抽出
+                const croppedCanvas = document.createElement('canvas');
+                const croppedCtx = croppedCanvas.getContext('2d');
+
+                const frameWidth = cameraCanvas.width * 0.6;
+                const frameHeight = cameraCanvas.height * 0.1;
+                const frameX = (cameraCanvas.width - frameWidth) / 2;
+                const frameY = (cameraCanvas.height - frameHeight) / 2;
+
+                croppedCanvas.width = frameWidth;
+                croppedCanvas.height = frameHeight;
+                croppedCtx.drawImage(cameraCanvas, frameX, frameY, frameWidth, frameHeight, 0, 0, frameWidth, frameHeight);
+
+                // tesseract.jsでOCR実行
+                //Tesseract.recognize(croppedCanvas).then(result => {
+                //    ocrResultLabel.textContent = `OCR結果：${result.text}`;
+                //});
+                Tesseract.recognize(croppedCanvas, {
+                    lang: 'jpn',  // 日本語の言語モデルを指定'jpn'
+                    //tessedit_char_whitelist: '0123456789' + '一二三四五六七八九十'  // 認識させたい文字を指定
+                    //tessedit_char_whitelist: '0123456789'  // 認識させたい文字を指定
+                }).then(result => {
+                    ocrResultLabel.textContent = `OCR結果：${result.text}`;
+                });
+            }
+        });
+
+        // カメラ起動ボタンがクリックされた時の動作を定義しています。
+        startCameraButton.addEventListener('click', async () => {
+            try {
+                if (!stream) { // カメラがまだ起動していなければ、以下の処理を実行
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true }); // カメラから映像を取得
+                    videoElement.srcObject = stream; // video要素に映像を設定
+                    videoElement.play(); // 映像を再生
+                }
+
+                startCameraButton.disabled = true; // カメラ起動ボタンを無効化
+                captureButton.disabled = false; // 撮影ボタンを有効化
+
+                isCapturing = true; // 映像の連続描画を開始
+
+                const ctx = cameraCanvas.getContext('2d');
+                const captureFrame = () => {
+                    if (stream && isCapturing) {
+                        ctx.drawImage(videoElement, 0, 0, cameraCanvas.width, cameraCanvas.height);
+                        drawRedFrame(ctx);
+                        requestAnimationFrame(captureFrame); // 描画を繰り返し行うための関数
+                    }
+                };
+
+                captureFrame();
+            } catch (error) {
+                console.error('カメラのアクセスエラー:', error);
+            }
+        });
+
+        // キャンバス上に赤い枠線を描く関数です。
+        function drawRedFrame(ctx) {
+            const frameWidth = cameraCanvas.width * 0.6;
+            const frameHeight = cameraCanvas.height * 0.2;
+            const frameX = (cameraCanvas.width - frameWidth) / 2;
+            const frameY = (cameraCanvas.height - frameHeight) / 2;
+
+            ctx.strokeStyle = 'red'; // 線の色を赤に設定
+            ctx.lineWidth = 15; // 線の太さを設定
+            ctx.strokeRect(frameX, frameY, frameWidth, frameHeight); // 枠線を描画
+        }
+    </script>
+</body>
+
+</html>
