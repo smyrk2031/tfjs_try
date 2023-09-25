@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>なめらかな水準器</title>
+        <style>
+            body {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                background-color: #f0f0f0;
+            }
+            #level {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            position: relative;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            margin-top: 20px;
+        }
+        .circle {
+            position: absolute;
+            border: 1px solid #000;
+            border-radius: 50%;
+        }
+        .indicator {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+            transition: top 0.2s, left 0.2s; /* 位置の変化をアニメーション効果で表現 */
+        }
+    </style>
+</head>
+<body>
+    <label for="inner-circle-degree">一番内側の円の度数：</label>
+    <input type="number" id="inner-circle-degree" value="0.5" step="0.1" min="0" max="30" onchange="drawCircles()" />
+    <div id="axis-values">
+        <p>X: <span id="x-value">0</span> 度</p>
+        <p>Y: <span id="y-value">0</span> 度</p>
+        <p>Z: <span id="z-value">0</span> 度</p>
+    </div>
+    <div id="level"></div>
+
+    <script>
+
+        window.addEventListener('devicemotion', function(event) {
+            const acc = event.accelerationIncludingGravity;
+            
+            const angleX = Math.atan2(acc.y, acc.z) * (180 / Math.PI);
+            const angleY = Math.atan2(acc.x, acc.z) * (180 / Math.PI);
+            const angleZ = Math.atan2(acc.x, acc.y) * (180 / Math.PI);
+            
+            document.getElementById('x-value').innerText = angleX.toFixed(2);
+            document.getElementById('y-value').innerText = angleY.toFixed(2);
+            document.getElementById('z-value').innerText = angleZ.toFixed(2);
+
+            const angle = Math.atan2(-acc.x, acc.y) * (180 / Math.PI);
+            updateLevel(angle);
+        });
+
+        function drawCircles() {
+            const level = document.getElementById('level');
+            level.innerHTML = '';
+            
+            const innerCircleDegree = parseFloat(document.getElementById('inner-circle-degree').value) || 0.5;
+            
+            // 同心円を描画
+            const degrees = [innerCircleDegree, 5, 10, 15, 20, 25, 30];
+            for (let i = 0; i < degrees.length; i++) {
+                const circle = document.createElement('div');
+                circle.className = 'circle';
+                const size = (i * 30) + 10;
+                circle.style.width = `${size}px`;
+                circle.style.height = `${size}px`;
+                circle.style.top = `calc(50% - ${size / 2}px)`;
+                circle.style.left = `calc(50% - ${size / 2}px)`;
+                level.appendChild(circle);
+            }
+            
+            // インジケーターの初期描画
+            const indicator = document.createElement('div');
+            indicator.className = 'indicator';
+            level.appendChild(indicator);
+        }
+
+        function updateLevel(angle) {
+            const level = document.getElementById('level');
+            const indicator = level.querySelector('.indicator');
+            
+            // 角度に応じてインジケーターを移動
+            const radius = 90 * (Math.min(Math.abs(angle), 30) / 30);
+            const radian = angle * (Math.PI / 180);
+            const left = 100 - radius * Math.sin(radian); // スマホを上に傾けたときのボールの動きを逆にする
+            const top = 100 - radius * Math.cos(radian);
+            indicator.style.left = `${left}px`;
+            indicator.style.top = `${top}px`;
+        }
+
+        // 初回描画
+        drawCircles();
+    </script>
+</body>
+</html>
